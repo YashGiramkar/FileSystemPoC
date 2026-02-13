@@ -1,0 +1,27 @@
+/ {
+    chosen {
+        nordic,pm-ext-flash = &mx25r64;
+    };
+};
+
+&mx25r64 {
+    partitions {
+        compatible = "fixed-partitions";
+        #address-cells = <1>;
+        #size-cells = <1>;
+
+        ext_storage_partition: partition@0 {
+            label = "ext_storage";
+            reg = <0x00000000 0x00400000>;
+        };
+    };
+};
+
+/ {
+    fatfs_disk: fatfs_disk {
+        compatible = "zephyr,flash-disk";
+        partition = <&ext_storage_partition>;
+        disk-name = "FLASH_DISK";
+        cache-size = <4096>;
+    };
+};
