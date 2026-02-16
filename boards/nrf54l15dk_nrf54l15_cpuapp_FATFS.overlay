@@ -22,6 +22,10 @@
         compatible = "zephyr,flash-disk";
         partition = <&ext_storage_partition>;
         disk-name = "FLASH_DISK";
-        cache-size = <4096>;
+        cache-size = <65536>;
     };
+};
+
+&ficr {
+    status = "disabled";
 };

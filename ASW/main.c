@@ -10,14 +10,17 @@ LOG_MODULE_REGISTER(main);
 static FATFS fat_fs;
 struct fs_file_t file;
 
+#define FAT_DRIVE_NAME "FLASH_DISK"
+#define FAT_MOUNT_POINT "/" FAT_DRIVE_NAME ":"
+
 char data[] = "Hello from nRF54 FATFS!\n";
 char read_buf[32];
 
 static struct fs_mount_t mount_info = {
     .type = FS_FATFS,
     .fs_data = &fat_fs,
-    .storage_dev = (void *)"FLASH_DISK",
-    .mnt_point = "/FLASH:"
+    .storage_dev = (void *)FAT_DRIVE_NAME,
+    .mnt_point = FAT_MOUNT_POINT
 };
 
 int main(void)
@@ -28,7 +31,7 @@ int main(void)
     if (rc < 0) {
         LOG_INF("Mount failed (%d), formatting...", rc);
 
-        rc = fs_mkfs(FS_FATFS, (uintptr_t)"FLASH_DISK", NULL, 0);
+        rc = fs_mkfs(FS_FATFS, (uintptr_t)(FAT_DRIVE_NAME ":"), NULL, 0);
         if (rc < 0) {
             LOG_ERR("Format failed (%d)", rc);
             return rc;
@@ -45,13 +48,13 @@ int main(void)
 
     fs_file_t_init(&file);
 
-    rc = fs_open(&file, "/FLASH:/test.txt",
+    rc = fs_open(&file, FAT_MOUNT_POINT "/test.txt",
              FS_O_CREATE | FS_O_WRITE);
 
     if (rc < 0)
     {
-        LOG_ERR("File open failed");
-        return 0;
+        LOG_ERR("File open failed (%d)", rc);
+        return rc;
     }
 
     rc = fs_write(&file, data, sizeof(data));
@@ -67,7 +70,7 @@ int main(void)
         return rc;
     }
 
-    rc = fs_open(&file, "/FLASH:/test.txt", FS_O_READ);
+    rc = fs_open(&file, FAT_MOUNT_POINT "/test.txt", FS_O_READ);
     if (rc < 0) {
         LOG_ERR("File reopen failed (%d)", rc);
         return rc;
