@@ -7,6 +7,6 @@ fatfs_ext:
   affiliation: disk
   extra_params:
     disk_name: FLASH_DISK
-    disk_cache_size: 65536
+    disk_cache_size: 4096
     disk_sector_size: 512
     disk_read_only: 0
