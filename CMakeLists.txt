@@ -17,4 +17,6 @@ endif()
 find_package(Zephyr REQUIRED HINTS $ENV{ZEPHYR_BASE})
 project(FileSystemPoC)
 
-target_sources(app PRIVATE ./ASW/main.c)
+add_subdirectory(ASW)
+add_subdirectory(LIB)
+
