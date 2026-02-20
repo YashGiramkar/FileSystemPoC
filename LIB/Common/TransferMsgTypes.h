@@ -4,7 +4,7 @@
  *                associated with file and data transfer
  * @date          18/02/26
  * @author        Yash Sunil Giramkar [YSG]
- * @copyright     Bajaj Auto Technology Limited (BATL)
+ * @copyright     Copyright(c) Yash Sunil Giramkar (YSG) as an unpublished work.
  */
 
 #ifndef TRANSFER_MSG_H
@@ -42,6 +42,9 @@
  */
 #define MAX_PATH_LEN                         3
 
+
+
+
 /******************************************************************************/
 /*                                                                            */
 /*                                   ENUMS                                    */
@@ -53,9 +56,14 @@
  */
 typedef enum {
    FSC_OPEN_DIR,
-   FSC_OPEN_FILE,
+   FSC_MAKE_DIR,
+   FSC_OPEN_FILE_READ,
+   FSC_OPEN_FILE_WRITE,
    FSC_WRITE_DATA,
    FSC_READ_FILE,
+   FSC_DEBUG_LIST_DRIVE,
+   FSC_DELETE_FILE,
+   FSC_DELETE_DIR,
    FSC_CLOSE_FILE,
    FSC_ABORT
 } FileSysCommand_E;
@@ -105,13 +113,13 @@ typedef struct {
 #endif //!TRANSFER_MSG_H
 
 /**
- * Copyright(c) Bajaj Auto Technology Limited (BATL) as an unpublished work.
- * THIS SOFTWARE AND/OR MATERIAL IS THE PROPERTY OF BATL.
- * ALL USE, DISCLOSURE, AND/OR REPRODUCTION NOT SPECIFICALLY AUTHORIZED BY
- * BATL IS PROHIBITED.
+ * Copyright(c) Yash Sunil Giramkar (YSG) as an unpublished work.
+ * ALL USE, DISCLOSURE, AND/OR REPRODUCTION IS ALLOWED ONLY IN ACCORDANCE WITH
+ * THE TERMS OF THE LICENSE
  *
  * @author:Yash Sunil Giramkar [YSG]
  */
+
 
 
 

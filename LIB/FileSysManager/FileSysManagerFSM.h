@@ -1,9 +1,9 @@
 /**
- * @file          Sample_Format.h
- * @brief         Header file containing <Details>
- * @date          <Date of generating H file - DD/MM/YY>
- * @author        <Author of H file - Name [Initials]>
- * @copyright     Bajaj Auto Technology Limited (BATL)
+ * @file          FileSysManagerFSM.h
+ * @brief         Header file for File System Manager FSM
+ * @date          20/02/26
+ * @author        Yash Sunil Giramkar [YSG]
+ * @copyright     Copyright(c) Yash Sunil Giramkar (YSG) as an unpublished work.
  */
 
 #ifndef FS_MGR_FSM_H
@@ -92,10 +92,9 @@ void gv_FileSysManagerFSMRun(FileSysManagerCTX_T *ctx);
 #endif //!FS_MGR_FSM_H
 
 /**
- * Copyright(c) Bajaj Auto Technology Limited (BATL) as an unpublished work.
- * THIS SOFTWARE AND/OR MATERIAL IS THE PROPERTY OF BATL.
- * ALL USE, DISCLOSURE, AND/OR REPRODUCTION NOT SPECIFICALLY AUTHORIZED BY
- * BATL IS PROHIBITED.
+ * Copyright(c) Yash Sunil Giramkar (YSG) as an unpublished work.
+ * ALL USE, DISCLOSURE, AND/OR REPRODUCTION IS ALLOWED ONLY IN ACCORDANCE WITH
+ * THE TERMS OF THE LICENSE
  *
- * @author:<Author of H file - Name [Initials]>
+ * @author:Yash Sunil Giramkar [YSG]
  */

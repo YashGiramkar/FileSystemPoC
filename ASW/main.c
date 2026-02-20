@@ -1,6 +1,23 @@
+/**
+ * @file          main.c
+ * @brief         Source file containing the main function which initializes the
+ *                system and starts the File System Manager FSM. This file
+ *                contains the entire testing harness for the File System Manager
+ *                module, allowing us to interact with the file system via UART
+ *                commands.
+ * @date          16/02/26
+ * @author        Yash Sunil Giramkar [YSG]
+ * @copyright     Copyright(c) Yash Sunil Giramkar (YSG) as an unpublished work.
+ */
+
+/******************************************************************************/
+/*                                                                            */
+/*                                  INCLUDES                                  */
+/*                                                                            */
+/******************************************************************************/
+
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
-#include <zephyr/sys/printk.h>
 #include <zephyr/device.h>
 #include <zephyr/devicetree.h>
 #include <zephyr/drivers/uart.h>
@@ -14,24 +31,77 @@
 #include "FileSysManager.h"
 #include "TransferMsgTypes.h"
 
+/******************************************************************************/
+/*                                                                            */
+/*                                  DEFINES                                   */
+/*                                                                            */
+/******************************************************************************/
+/**
+ * @def           Logger Module for main.c
+ * @brief         This define is used to register the logging module for the main
+ *                application.
+ */
 LOG_MODULE_REGISTER(MAIN);
 
-#define UART_LINE_BUF_SIZE                   256
+/**
+ * @def           UART_LINE_BUF_SIZE
+ * @brief         Defines the maximum buffer size for reading lines from UART.
+ */
+#define UART_LINE_BUF_SIZE                   255
 
+/******************************************************************************/
+/*                                                                            */
+/*                             PRIVATE VARIABLES                              */
+/*                                                                            */
+/******************************************************************************/
+/**
+ * @var           stpt_consoleUART
+ * @brief         Pointer to the UART device used for console input/output.
+ *                This is initialized using the device tree to get the console
+ *                UART specified for the Zephyr application.
+ */
 static const struct device *stpt_consoleUART = DEVICE_DT_GET(DT_CHOSEN(zephyr_console));
 
+/******************************************************************************/
+/*                                                                            */
+/*                       PRIVATE FUNCTION DEFINITIONS                          */
+/*                                                                            */
+/******************************************************************************/
+/**
+ * @private       sv_PrintHelp
+ * @brief         Prints the list of supported UART commands.
+ * @param[in]     None
+ * @param[out]    None
+ * @param[inout]  None
+ * @return        None
+ */
 static void sv_PrintHelp(void)
 {
-   printk("\nFileSys UART Test Commands:\n");
-   printk("  help\n");
-   printk("  mkdir <path>\n");
-   printk("  open <path>\n");
-   printk("  write <text payload>\n");
-   printk("  read [bytes]\n");
-   printk("  close\n");
-   printk("  abort\n\n");
+   LOG_INF("FileSys UART Test Commands:");
+   LOG_INF("  help");
+   LOG_INF("  mkdir <path>");
+   LOG_INF("  cd <path>");
+   LOG_INF("  openr <path>");
+   LOG_INF("  openw <path>");
+   LOG_INF("  write <text payload>");
+   LOG_INF("  read [bytes]");
+   LOG_INF("  ls");
+   LOG_INF("  delfile <path>");
+   LOG_INF("  deldir <path>");
+   LOG_INF("  close");
+   LOG_INF("  abort");
 }
 
+/**
+ * @private       si_UartReadLine
+ * @brief         Reads one command line from UART console with basic echo and
+ *                backspace handling.
+ * @param[in]     cptr_rxLine - Destination buffer for received line.
+ * @param[in]     u8_maxLen - Maximum buffer length.
+ * @param[out]    None
+ * @param[inout]  cptr_rxLine
+ * @return        Number of bytes read (excluding null terminator).
+ */
 static int si_UartReadLine(char *cptr_rxLine, uint8_t u8_maxLen)
 {
       uint8_t u8_idx = 0U;
@@ -43,7 +113,6 @@ static int si_UartReadLine(char *cptr_rxLine, uint8_t u8_maxLen)
       {
          if ((uc_readChar == '\r') || (uc_readChar == '\n')) {
                cptr_rxLine[u8_idx] = '\0';
-               printk("\r\n");
                return (int)u8_idx;
          }
 
@@ -52,7 +121,6 @@ static int si_UartReadLine(char *cptr_rxLine, uint8_t u8_maxLen)
             if (u8_idx > 0U)
             {
                u8_idx--;
-               printk("\b \b");
             }
             continue;
          }
@@ -70,6 +138,14 @@ static int si_UartReadLine(char *cptr_rxLine, uint8_t u8_maxLen)
    return (int)(u8_maxLen - 1U);
 }
 
+/**
+ * @private       sp_ArgStart
+ * @brief         Splits command and argument, returns pointer to first argument.
+ * @param[in]     cptr_rxLine - Input line containing command and optional args.
+ * @param[out]    None
+ * @param[inout]  cptr_rxLine
+ * @return        Pointer to first arg, or NULL if arg is absent.
+ */
 static char *sp_ArgStart(char *cptr_rxLine)
 {
    char *arg = strchr(cptr_rxLine, ' ');
@@ -90,6 +166,14 @@ static char *sp_ArgStart(char *cptr_rxLine)
    return (*arg == '\0') ? NULL : arg;
 }
 
+/**
+ * @private       si_EnqueueMsg
+ * @brief         Sends a parsed message to File System Manager message queue.
+ * @param[in]     msg - Message to enqueue.
+ * @param[out]    None
+ * @param[inout]  None
+ * @return        0 on success, negative error code on failure.
+ */
 static int si_EnqueueMsg(const FileSysMessage_T *msg)
 {
    struct k_msgq *FSMGR_MsgQ = gstpt_FSMGR_GetMsgQ();
@@ -97,20 +181,15 @@ static int si_EnqueueMsg(const FileSysMessage_T *msg)
    return k_msgq_put(FSMGR_MsgQ, msg, K_MSEC(100));
 }
 
-static int si_ParseHexByte(const char *token, uint8_t *out)
-{
-   char *end = NULL;
-   unsigned long value = strtoul(token, &end, 16);
-
-   if ((token[0] == '\0') || (*end != '\0') || (value > 0xFFUL))
-   {
-      return -EINVAL;
-   }
-
-   *out = (uint8_t)value;
-   return 0;
-}
-
+/**
+ * @private       sv_HandleLine
+ * @brief         Parses one UART command line and converts it into
+ *                FileSysMessage_T command for FSM processing.
+ * @param[in]     cptr_rxLine - UART input line.
+ * @param[out]    None
+ * @param[inout]  cptr_rxLine
+ * @return        None
+ */
 static void sv_HandleLine(char *cptr_rxLine)
 {
    FileSysMessage_T msg;
@@ -143,7 +222,19 @@ static void sv_HandleLine(char *cptr_rxLine)
    {
       if (arg == NULL)
       {
-         printk("mkdir requires a path\n");
+         LOG_ERR("mkdir requires a path");
+         return;
+      }
+
+      msg.e_command = FSC_MAKE_DIR;
+      msg.u32_sizeOfData = MIN((uint32_t)strlen(arg), (uint32_t)FS_MAX_CHUNK_SIZE);
+      (void)memcpy(msg.u8_data, arg, msg.u32_sizeOfData);
+   }
+   else if (strcmp(cptr_rxLine, "cd") == 0)
+   {
+      if (arg == NULL)
+      {
+         LOG_ERR("cd requires a path");
          return;
       }
 
@@ -151,15 +242,27 @@ static void sv_HandleLine(char *cptr_rxLine)
       msg.u32_sizeOfData = MIN((uint32_t)strlen(arg), (uint32_t)FS_MAX_CHUNK_SIZE);
       (void)memcpy(msg.u8_data, arg, msg.u32_sizeOfData);
    }
-   else if (strcmp(cptr_rxLine, "open") == 0)
+   else if (strcmp(cptr_rxLine, "openr") == 0)
    {
       if (arg == NULL)
       {
-         printk("open requires a path\n");
+         LOG_ERR("openr requires a path");
          return;
       }
 
-      msg.e_command = FSC_OPEN_FILE;
+      msg.e_command = FSC_OPEN_FILE_READ;
+      msg.u32_sizeOfData = MIN((uint32_t)strlen(arg), (uint32_t)FS_MAX_CHUNK_SIZE);
+      (void)memcpy(msg.u8_data, arg, msg.u32_sizeOfData);
+   }
+   else if (strcmp(cptr_rxLine, "openw") == 0)
+   {
+      if (arg == NULL)
+      {
+         LOG_ERR("openw requires a path");
+         return;
+      }
+
+      msg.e_command = FSC_OPEN_FILE_WRITE;
       msg.u32_sizeOfData = MIN((uint32_t)strlen(arg), (uint32_t)FS_MAX_CHUNK_SIZE);
       (void)memcpy(msg.u8_data, arg, msg.u32_sizeOfData);
    }
@@ -167,7 +270,7 @@ static void sv_HandleLine(char *cptr_rxLine)
    {
       if (arg == NULL)
       {
-         printk("write requires payload\n");
+         LOG_ERR("write requires payload");
          return;
       }
 
@@ -185,12 +288,40 @@ static void sv_HandleLine(char *cptr_rxLine)
          ul_readSize = strtoul(arg, &end, 10);
          if ((*arg == '\0') || (*end != '\0') || (ul_readSize == 0UL))
          {
-            printk("read expects optional positive byte count\n");
+            LOG_ERR("read expects optional positive byte count");
             return;
          }
 
          msg.u32_sizeOfData = MIN((uint32_t)ul_readSize, (uint32_t)FS_MAX_CHUNK_SIZE);
       }
+   }
+   else if (strcmp(cptr_rxLine, "ls") == 0)
+   {
+      msg.e_command = FSC_DEBUG_LIST_DRIVE;
+   }
+   else if (strcmp(cptr_rxLine, "delfile") == 0)
+   {
+      if (arg == NULL)
+      {
+         LOG_ERR("delfile requires a path");
+         return;
+      }
+
+      msg.e_command = FSC_DELETE_FILE;
+      msg.u32_sizeOfData = MIN((uint32_t)strlen(arg), (uint32_t)FS_MAX_CHUNK_SIZE);
+      (void)memcpy(msg.u8_data, arg, msg.u32_sizeOfData);
+   }
+   else if (strcmp(cptr_rxLine, "deldir") == 0)
+   {
+      if (arg == NULL)
+      {
+         LOG_ERR("deldir requires a path");
+         return;
+      }
+
+      msg.e_command = FSC_DELETE_DIR;
+      msg.u32_sizeOfData = MIN((uint32_t)strlen(arg), (uint32_t)FS_MAX_CHUNK_SIZE);
+      (void)memcpy(msg.u8_data, arg, msg.u32_sizeOfData);
    }
    else if (strcmp(cptr_rxLine, "close") == 0)
    {
@@ -202,7 +333,7 @@ static void sv_HandleLine(char *cptr_rxLine)
    }
    else
    {
-      printk("Unknown command: %s\n", cptr_rxLine);
+      LOG_ERR("Unknown command: %s", cptr_rxLine);
       sv_PrintHelp();
       return;
    }
@@ -210,13 +341,27 @@ static void sv_HandleLine(char *cptr_rxLine)
    ret = si_EnqueueMsg(&msg);
    if (ret != 0)
    {
-      printk("Queue put failed (%d)\n", ret);
+      LOG_ERR("Queue put failed (%d)", ret);
       return;
    }
 
-   printk("Queued cmd=%d size=%u\n", msg.e_command, msg.u32_sizeOfData);
+   LOG_INF("Queued cmd=%d size=%u", msg.e_command, msg.u32_sizeOfData);
 }
 
+/******************************************************************************/
+/*                                                                            */
+/*                        PUBLIC FUNCTION DEFINITIONS                         */
+/*                                                                            */
+/******************************************************************************/
+/**
+ * @public        main
+ * @brief         Initializes UART harness and continuously processes user
+ *                commands for File System Manager testing.
+ * @param[in]     None
+ * @param[out]    None
+ * @param[inout]  None
+ * @return        0 on normal path, negative error code if UART is not ready.
+ */
 int main(void)
 {
    char cptr_rxLine[UART_LINE_BUF_SIZE];
@@ -227,7 +372,7 @@ int main(void)
       return -ENODEV;
    }
 
-   printk("\nFileSysManager UART harness ready. Type 'help'.\n> ");
+   LOG_INF("FileSysManager UART harness ready. Type 'help'.");
 
    while (1)
    {
@@ -238,8 +383,15 @@ int main(void)
          sv_HandleLine(cptr_rxLine);
       }
 
-      printk("> ");
    }
 
    return 0;
 }
+
+/**
+ * Copyright(c) Yash Sunil Giramkar (YSG) as an unpublished work.
+ * ALL USE, DISCLOSURE, AND/OR REPRODUCTION IS ALLOWED ONLY IN ACCORDANCE WITH
+ * THE TERMS OF THE LICENSE
+ *
+ * @author:Yash Sunil Giramkar [YSG]
+ */

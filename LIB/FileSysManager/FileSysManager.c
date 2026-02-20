@@ -1,9 +1,10 @@
 /**
- * @file          Sample_Format.c
- * @brief         Source file containing <Details>
- * @date          <Date of generating C file - DD/MM/YY>
- * @author        <Author of C file - Name [Initials]>
- * @copyright     Bajaj Auto Technology Limited (BATL)
+ * @file          FileSysManager.c
+ * @brief         Source file for File System Manager module which initializes
+ *                the file system and runs the FSM.
+ * @date          16/02/26
+ * @author        Yash Sunil Giramkar [YSG]
+ * @copyright     Copyright(c) Yash Sunil Giramkar (YSG) as an unpublished work.
  */
 
 /******************************************************************************/
@@ -21,20 +22,29 @@
 /*                                                                            */
 /******************************************************************************/
 /**
- * @def           <Define name>
- * @brief         <Define details>.
+ * @def           FSMGR_THREAD_STACK_SIZE
+ * @brief         Stack size for the file system manager thread
  */
-
 #define FSMGR_THREAD_STACK_SIZE              4096
+
+/**
+ * @def           FSMGR_THREAD_PRIORITY
+ * @brief         Priority for the file system manager thread
+ */
 #define FSMGR_THREAD_PRIORITY                5
 
-// Logging module for FileSysManager
+/**
+ * @def           Logger Module for File System Manager
+ * @brief         This define is used to register the logging module for the File System Manager.
+ */
 LOG_MODULE_REGISTER(FSMGR);
 
-K_MSGQ_DEFINE(fs_msgq, sizeof(FileSysMessage_T), 16, 4);
-
-// Structure to hold FATFS and file information
-static FATFS st_FatFs;
+/**
+ * @def           FSMGR_MSG_Q for messages between FOTA FSM and File System Manager
+ * @brief         This message queue is used for communication between the FOTA
+ *                FSM and the File System Manager.
+ */
+K_MSGQ_DEFINE(FSMGR_MSG_Q, sizeof(FileSysMessage_T), 16, 4);
 
 /******************************************************************************/
 /*                                                                            */
@@ -63,20 +73,6 @@ static FATFS st_FatFs;
  * @struct        <Structure name>
  * @brief         <Structure details>.
  */
-
-// Declarations of all the structure variables
-/**
- * @var           <Variable name>
- * @brief         <Variable details>.
- */
-// File system mount info structure
-static struct fs_mount_t mount_info = {
-    .type = FS_FATFS,
-    .fs_data = &st_FatFs,
-    .storage_dev = (void *)FAT_DRIVE_NAME,
-    .mnt_point = FAT_MOUNT_POINT
-};
-
 /******************************************************************************/
 /*                                                                            */
 /*                                   UNIONS                                   */
@@ -123,13 +119,27 @@ static int si_FileSystemMount(void);
 /*                                                                            */
 /******************************************************************************/
 /**
- * @var           <Variable name>
- * @brief         <Variable details>.
+ * @var           st_FatFs
+ * @brief         The FATFS structure for the file system.
+ */
+static FATFS st_FatFs;
+
+/**
+ * @var           sst_mountInfo
+ * @brief         The mount information structure for the file system.
+ */
+static struct fs_mount_t sst_mountInfo = {
+    .type = FS_FATFS,
+    .fs_data = &st_FatFs,
+    .storage_dev = (void *)FAT_DRIVE_NAME,
+    .mnt_point = FAT_MOUNT_POINT
+};
+
+/**
+ * @var           sst_FSMGRContext
+ * @brief         Variable to hold the context of the File System Manager FSM.
  */
 static FileSysManagerCTX_T sst_FSMGRContext;
-
-// File information structure for the file we will create and read from
-// struct fs_file_t st_FileInfo;
 
 /******************************************************************************/
 /*                                                                            */
@@ -143,21 +153,20 @@ static FileSysManagerCTX_T sst_FSMGRContext;
 /*                                                                            */
 /******************************************************************************/
 /**
- * @private       <Function name>
- * @brief         <Function details>.
- * @param[in]     <Input parameter details>.
- * @param[out]    <Output parameter details>.
- * @param[inout]  <Input-Output parameter details>.
- * @return        <Return details>.
+ * @private       si_FileSystemMount
+ * @brief         Function to mount the file system, and format it if mounting fails.
+ * @param[in]     None
+ * @param[out]    None
+ * @param[inout]  None
+ * @return        0 on success, negative error code on failure.
  */
-
 static int si_FileSystemMount(void)
 {
    // Variable to hold return codes from file system operations
    int i_RetCode;
 
    // Attempt to mount the file system
-   i_RetCode = fs_mount(&mount_info);
+   i_RetCode = fs_mount(&sst_mountInfo);
 
       // If mounting fails, attempt to format the drive and mount again
    if (i_RetCode < 0)
@@ -174,7 +183,7 @@ static int si_FileSystemMount(void)
       }
 
       // Try mounting again after formatting
-      i_RetCode = fs_mount(&mount_info);
+      i_RetCode = fs_mount(&sst_mountInfo);
       // If mounting still fails after formatting, log the error and exit
       if (i_RetCode < 0)
       {
@@ -185,8 +194,17 @@ static int si_FileSystemMount(void)
    return i_RetCode;
 }
 
-
-static void fs_thread(void *a, void *b, void *c)
+/**
+ * @private       sv_FSMGR_Thread
+ * @brief         The thread function for the File System Manager FSM.
+ *                It mounts the file system and then continuously processes
+ *                incoming messages from the message queue.
+ * @param[in]     vptr1 - Unused parameter for thread entry function.
+ * @param[out]    None
+ * @param[inout]  None
+ * @return        0 on success, negative error code on failure.
+ */
+static void sv_FSMGR_Thread(void *vptr1, void *vptr2, void *vptr3)
 {
    // Variable to hold return codes from file system operations
    int i_RetCode;
@@ -209,12 +227,18 @@ static void fs_thread(void *a, void *b, void *c)
 
    while (1)
    {
-      k_msgq_get(&fs_msgq, &sst_FSMGRContext.st_currentMsg, K_FOREVER);
+      k_msgq_get(&FSMGR_MSG_Q, &sst_FSMGRContext.st_currentMsg, K_FOREVER);
       gv_FileSysManagerFSMRun(&sst_FSMGRContext);
    }
 }
+
+/**
+ * @def           sv_FSMGR_Thread registeration
+ * @brief         This macro registers the File System Manager thread with the
+ *                Zephyr kernel.
+ */
 K_THREAD_DEFINE(fs_tid, FSMGR_THREAD_STACK_SIZE,
-                fs_thread, NULL, NULL, NULL,
+                sv_FSMGR_Thread, NULL, NULL, NULL,
                 FSMGR_THREAD_PRIORITY, 0, 0);
 
 
@@ -226,23 +250,22 @@ K_THREAD_DEFINE(fs_tid, FSMGR_THREAD_STACK_SIZE,
 /*                                                                            */
 /******************************************************************************/
 /**
- * @public        <Function name>
- * @brief         <Function details>.
- * @param[in]     <Input parameter details>.
- * @param[out]    <Output parameter details>.
- * @param[inout]  <Input-Output parameter details>.
- * @return        <Return details>.
+ * @public        gstpt_FSMGR_GetMsgQ
+ * @brief         Returns a pointer to the File System Manager message queue.
+ * @param[in]     None
+ * @param[out]    None
+ * @param[inout]  None
+ * @return        Pointer to the File System Manager message queue.
  */
 struct k_msgq *gstpt_FSMGR_GetMsgQ(void)
 {
-    return &fs_msgq;
+    return &FSMGR_MSG_Q;
 }
 
 /**
- * Copyright(c) Bajaj Auto Technology Limited (BATL) as an unpublished work.
- * THIS SOFTWARE AND/OR MATERIAL IS THE PROPERTY OF BATL.
- * ALL USE, DISCLOSURE, AND/OR REPRODUCTION NOT SPECIFICALLY AUTHORIZED BY
- * BATL IS PROHIBITED.
+ * Copyright(c) Yash Sunil Giramkar (YSG) as an unpublished work.
+ * ALL USE, DISCLOSURE, AND/OR REPRODUCTION IS ALLOWED ONLY IN ACCORDANCE WITH
+ * THE TERMS OF THE LICENSE
  *
- * @author:<Author of C file - Name [Initials]>
+ * @author:Yash Sunil Giramkar [YSG]
  */
