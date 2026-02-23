@@ -12,6 +12,7 @@ Core pieces:
 - `LIB/FileSysManager/FileSysManager.c`: mount/mkfs logic and FSM thread.
 - `LIB/FileSysManager/FileSysManagerFSM.c`: state-machine logic for directory/file operations.
 - `LIB/Common/TransferMsgTypes.h`: command/message contract between UART harness and FSM.
+- `DOC`: Folder contains documentation associated with the project.
 
 ## Storage Setup
 
@@ -61,7 +62,7 @@ Type `help` on UART console to print available commands.
 - Delete operations are accepted only from IDLE (via dedicated DELETE state).
 - Debug `ls` command is executed only in IDLE.
 - Path handling supports:
-  - absolute FATFS path (example: `/FLASH_DISK:/VCU/a.txt`)
+  - absolute FATFS path (example: `/FLASH_DISK:/TLA/a.txt`)
   - relative paths using current directory context.
 
 ## Known Limits

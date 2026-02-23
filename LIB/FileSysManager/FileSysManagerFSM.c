@@ -448,6 +448,82 @@ static enum smf_state_result se_IdleRun(void *vptr)
    return SMF_EVENT_HANDLED;
 }
 
+
+
+/**
+ * @private       si_CheckDIRAndUnlinkFiles
+ * @brief         Helper function to check if a directory is empty and unlink
+ *                files if not.
+ * @param[in]     ccpt_dirPath - Path of the directory to check and clear.
+ * @return        0 if the directory is empty or successfully cleared, negative
+ *                error code if an error occurs. Note that if the directory
+ *                contains subdirectories, this function will fail with -ENOTSUP
+ *                as recursive deletion is not supported.
+ */
+static int si_CheckDIRAndUnlinkFiles(const char *ccpt_dirPath)
+{
+   struct fs_dir_t st_dir;
+   struct fs_dirent st_entry;
+   char as8_entryPath[FSMGR_MAX_PATH_BUF];
+   int i_retVal;
+
+   // Open the directory for reading
+   fs_dir_t_init(&st_dir);
+   i_retVal = fs_opendir(&st_dir, ccpt_dirPath);
+   if (i_retVal != 0)
+   {
+      return i_retVal;
+   }
+
+   while (1)
+   {
+      // Read the next entry in the directory
+      i_retVal = fs_readdir(&st_dir, &st_entry);
+      if (i_retVal != 0)
+      {
+         // If there is an error reading the directory, close and return error
+         fs_closedir(&st_dir);
+         return i_retVal;
+      }
+
+      // If the entry name is empty, we have reached the end of the directory
+      if (st_entry.name[0] == '\0')
+      {
+         break;
+      }
+
+      // If the entry is a directory, we do not support recursive deletion
+      if (st_entry.type == FS_DIR_ENTRY_DIR)
+      {
+         // Subdirectories are not supported for deletion in this implementation
+         fs_closedir(&st_dir);
+         return -ENOTSUP;
+      }
+
+      // If the entry is a file, build the full path and unlink it
+      if (snprintf(as8_entryPath, sizeof(as8_entryPath), "%s/%s", ccpt_dirPath,
+                                          st_entry.name) >= sizeof(as8_entryPath))
+      {
+         // If the path is too long, log a warning and skip this entry
+         fs_closedir(&st_dir);
+         return -ENAMETOOLONG;
+      }
+
+      // Unlink the file and check for errors
+      i_retVal = fs_unlink(as8_entryPath);
+      if (i_retVal != 0)
+      {
+         // If there is an error unlinking the file, close and return error
+         fs_closedir(&st_dir);
+         return i_retVal;
+      }
+   }
+
+   // Close the directory and return success
+   fs_closedir(&st_dir);
+   return 0;
+}
+
 /*************************Idel State Functions Ends****************************/
 
 
@@ -658,13 +734,31 @@ static void sv_DeleteEntry(void *vptr)
       return;
    }
 
-   if ((stpt_ctx->st_currentMsg.e_command == FSC_DELETE_DIR) &&
-       (st_entry.type != FS_DIR_ENTRY_DIR))
+   if (stpt_ctx->st_currentMsg.e_command == FSC_DELETE_DIR)
    {
-      LOG_ERR("Delete dir requested for non-dir: %s", as8_targetPath);
-      smf_set_state(SMF_CTX(stpt_ctx), &scst_FSMGR_stateTable[STATE_FAILED]);
-      return;
+      if(st_entry.type != FS_DIR_ENTRY_DIR)
+      {
+         LOG_ERR("Delete dir requested for non-dir: %s", as8_targetPath);
+         smf_set_state(SMF_CTX(stpt_ctx), &scst_FSMGR_stateTable[STATE_FAILED]);
+         return;
+      }
+      else
+      {
+         // Check if the directory contains any files, if they exist, unlink all files first before deleting the directory
+         i_retVal = si_CheckDIRAndUnlinkFiles(as8_targetPath);
+         if (i_retVal != 0)
+         {
+            LOG_ERR("Failed to clear directory contents (%d): %s", i_retVal, as8_targetPath);
+            smf_set_state(SMF_CTX(stpt_ctx), &scst_FSMGR_stateTable[STATE_FAILED]);
+            return;
+         }
+         else
+         {
+            LOG_INF("Directory cleared successfully: %s", as8_targetPath);
+         }
+      }
    }
+
 
    i_retVal = fs_unlink(as8_targetPath);
    if (i_retVal != 0)
